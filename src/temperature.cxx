@@ -8,26 +8,18 @@
 #include <vector>
 
 // Read the temperature CSV file
-
 std::vector<std::vector<std::string>> parseTemperatureCSV(
     const std::string& filename
 ) {
     std::ifstream file(filename);
 
-    // Stop if the file cannot be opened
     if (!file.is_open()) {
-        throw std::runtime_error(
-            "Could not open temperature file: " + filename
-        );
+        throw std::runtime_error("Could not open temperature file: " + filename);
     }
 
     std::vector<std::vector<std::string>> rows;
     std::string line;
 
-    // Skip the first line because it contains the column names
-    std::getline(file, line);
-
-    // Read the file one line at a time
     while (std::getline(file, line)) {
         if (line.empty()) {
             continue;
@@ -48,14 +40,12 @@ std::vector<std::vector<std::string>> parseTemperatureCSV(
     return rows;
 }
 
-//Calculate one mean temperature per day
-
+//Calculate the mean temperature for each day
 std::vector<DailyTemperature> calculateDailyMean(
     const std::vector<std::vector<std::string>>& data,
     int firstYear,
     int lastYear
 ) {
-    // Temporary information collected for each date
     struct DayData {
         double sum = 0.0;
         int nObservations = 0;
@@ -63,58 +53,41 @@ std::vector<DailyTemperature> calculateDailyMean(
         int nYellow = 0;
     };
 
-    //Observations from the same date collected together
+    //Collect observations from the same date together
     std::map<std::string, DayData> dailyData;
 
     for (const auto& row : data) {
-        if (row.size() < 4)
-            continue;
-
-        const std::string& date = row[0];
-
-        int year;
-        try {
-            year = std::stoi(date.substr(0, 4));
-        } catch (...) {
-            continue;
-        }
-
-        if (year < firstYear || year > lastYear) {
-            continue;
-        }
-
-        double temperature;
-        try {
-            temperature = std::stod(row[2]);
-        } catch (...) {
-            continue;
-        }
-
-        const std::string& quality = row[3];
+        if (row.size() < 4) continue;
         
-        DayData& day = dailyData[date];
-        day.sum += temperature;
-        day.nObservations++;
+        try {
+            const std::string& date = row[0];
+            int year = std::stoi(date.substr(0, 4));
+            
+            if (year < firstYear || year > lastYear) continue;
+            
+            double temperature = std::stod(row[2]);
 
-        // Count observations by quality
-        if (quality == "G") {
-            day.nGood++;
-        } else if (quality == "Y") {
-            day.nYellow++;
+            DayData& day = dailyData[date];
+            
+            day.sum += temperature;
+            day.nObservations++;
+
+            // Count observations by quality
+            if (row[3] == "G") day.nGood++;
+            if (row[3] == "Y") day.nYellow++;
+            
+        } catch (const std::exception&) {
+            continue;
         }
     }
 
     std::vector<DailyTemperature> result;
 
     // Calculate the mean for each date    
-    for (const auto& entry : dailyData) {
-        const std::string& date = entry.first;
-        const DayData& day = entry.second;
+    for (const auto& [date, day] : dailyData) {
 
         // Ignore dates with fewer than two observations
-        if (day.nObservations < 2) {
-            continue;
-        }
+        if (day.nObservations < 2) continue;
         
         DailyTemperature dailyTemperature;
         dailyTemperature.date = date;
@@ -130,8 +103,7 @@ std::vector<DailyTemperature> calculateDailyMean(
     return result;
 }
 
-//Calculate the seasonal temperature profile
-
+//Calculate the mean temperature for each day of the year
 TemperatureProfile calculateMeanTemperatureByDayOfYear(
     const std::vector<DailyTemperature>& dailyData
 ) {
@@ -145,72 +117,53 @@ TemperatureProfile calculateMeanTemperatureByDayOfYear(
     };
     
     for (const auto& day : dailyData) {
-        int year, month, dayOfMonth;
-
-        // Extract the year, month and day from YYYY-MM-DD
         try {
-            year = std::stoi(day.date.substr(0, 4));
-            month = std::stoi(day.date.substr(5, 2));
-            dayOfMonth = std::stoi(day.date.substr(8, 2));
-        } catch (...) {
+            int year = std::stoi(day.date.substr(0, 4));
+            int month = std::stoi(day.date.substr(5, 2));
+            int dayOfMonth = std::stoi(day.date.substr(8, 2));
+
+            // Avoid invalid month values before accessing the array.
+            if (month < 1 || month > 12) continue;
+            if (dayOfMonth < 1 || dayOfMonth > 31) continue;
+
+            // Check whether the year contains February 29
+            bool leapYear =
+                (year % 4 == 0 && year % 100 != 0) ||
+                (year % 400 == 0);
+
+            // Exclude February 29 to use a common 365-day calendar
+            if (leapYear && month == 2 && dayOfMonth == 29) {
+                continue;
+            }
+
+            int dayOfYear =
+                daysBeforeMonth[month - 1] + dayOfMonth;
+            
+            // Shift dates after February 29 back by one day
+            if (leapYear && month > 2) {
+                dayOfYear--;
+            }
+            
+            values[dayOfYear - 1].push_back(day.meanTemperature);
+
+        } catch (const std::exception&) {
             continue;
         }
-
-        // Avoid invalid month values before accessing the array.
-        if (month < 1 || month > 12 ||
-            dayOfMonth < 1 || dayOfMonth > 31) {
-            continue;
-        }
-
-        // Convert the date into a day number (1-365)
-        int dayOfYear =
-            daysBeforeMonth[month - 1] + dayOfMonth;
-
-        // Check whether the year contains February 29
-        bool leapYear =
-            (year % 4 == 0 && year % 100 != 0) ||
-            (year % 400 == 0);
-
-        // Exclude February 29 to use a common 365-day calendar
-        if (leapYear && month == 2 && dayOfMonth == 29) {
-            continue;
-        }
-
-        // Shift dates after February 29 back by one day
-        if (leapYear && month > 2) {
-            dayOfYear--;
-        }
-
-        int index = dayOfYear - 1;
-
-        if (index < 0 || index >= 365) {
-            continue;
-        }
-
-        // Collect the daily mean for this calendar day across all years
-        values[index].push_back(day.meanTemperature);
     }
 
     TemperatureProfile result;
 
-    // Calculate the mean temperature for each day of the year
     for (int i = 0; i < 365; ++i) {
-        // Skip days without observations
-        if (values[i].empty()) {
-        continue;
-        }
+        if (values[i].empty()) continue;
 
-        result.days.push_back(i + 1);
-
-        // Calculate the average temperature
         double sum = 0.0;
-        
+
         for (double temperature : values[i]) {
             sum += temperature;
         }
 
-        double mean = sum / values[i].size();
-        result.meanValues.push_back(mean);
+        result.days.push_back(i + 1);
+        result.meanValues.push_back(sum / values[i].size());
     }
 
     return result;
