@@ -28,28 +28,19 @@ void plotSeasonalTemperature(
     gStyle->SetPadGridY(true);
 
     // Create the drawing canvas
-    TCanvas canvas(
-        "temperature_canvas",
-        "Seasonal temperature",
-        1000,
-        700
-    );
+    TCanvas canvas("temperature_canvas", "Seasonal temperature", 1000, 700);
 
     // Create one histogram with 365 bins for each city
     TH1D lundHistogram(
         "lund_temperature",
         "Daily mean temperature;Day of year;Temperature (#circC)",
-        365,
-        0.5,
-        365.5
+        365, 0.5, 365.5
     );
 
     TH1D umeaHistogram(
         "umea_temperature",
         "Daily mean temperature;Day of year;Temperature (#circC)",
-        365,
-        0.5,
-        365.5
+        365, 0.5, 365.5
     );
 
     // Keep the histograms independent of ROOT's current directory
@@ -110,62 +101,58 @@ void plotTemperatureAllYears(
     // Store each year's points as (day of year, daily mean temperature)
     std::map<int, std::vector<std::pair<int, double>>> yearlyData;
 
+    const int daysBeforeMonth[] = {
+        0, 31, 59, 90, 120, 151,
+        181, 212, 243, 273, 304, 334
+    };
+    
     for (const auto& day : dailyData) {
-        // Parse the date in YYYY-MM-DD format
-        std::tm date = {};
-        std::istringstream dateStream(day.date);
-        dateStream >> std::get_time(&date, "%Y-%m-%d");
+        try {
+            int year = std::stoi(day.date.substr(0, 4));
+            int month = std::stoi(day.date.substr(5, 2));
+            int dayOfMonth = std::stoi(day.date.substr(8, 2));
 
-        if (dateStream.fail()) {
+            if (month < 1 || month > 12) continue;
+            if (dayOfMonth < 1 || dayOfMonth > 31) continue;
+
+            bool leapYear =
+                (year % 4 == 0 && year % 100 != 0) ||
+                (year % 400 == 0);
+
+            if (leapYear && month == 2 && dayOfMonth == 29) {
+                continue;
+            }
+
+            int dayOfYear =
+                daysBeforeMonth[month - 1] + dayOfMonth;
+
+            if (leapYear && month > 2) {
+                dayOfYear--;
+            }
+
+            yearlyData[year].push_back({
+                dayOfYear,
+                day.meanTemperature
+            });
+
+        } catch (const std::exception&) {
             continue;
         }
-
-        //Set the time fields before converting the date
-        date.tm_hour = 12;
-        date.tm_isdst = -1;
-
-        if (std::mktime(&date) == -1) {
-            continue;
-        }
-
-        int year = date.tm_year + 1900;
-
-        // Convert the date to a common 365-day calendar
-        // Exclude February 29 and shift later dates in leap years
-        bool leapYear =
-            (year % 4 == 0 && year % 100 != 0) || 
-            (year % 400 == 0);
-
-        if (date.tm_mon == 1 && date.tm_mday == 29) {
-            continue;
-        }
-
-        int dayOfYear = date.tm_yday + 1;
-
-        if (leapYear && date.tm_mon > 1) {
-            --dayOfYear;
-        }
-
-        // Store the point under its corresponding year
-        yearlyData[year].push_back({
-            dayOfYear,
-            day.meanTemperature
-        });
     }
 
     // Create a canvas for this city
     TCanvas canvas(
         ("temperature_years_" + city).c_str(),
         (city + " daily mean temperatures by year").c_str(),
-        1000,
-        700
+        1000, 700
     );
 
-    // A multigraph combines the yearly curves and the average curve
+    // Combine the yearly curves and the average curve
     TMultiGraph multiGraph;
+    
     multiGraph.SetTitle(
-    ("Daily mean temperature in " + city +
-     ";Day of year;Daily mean temperature (#circC)").c_str()
+        ("Daily mean temperature in " + city +
+         ";Day of year;Daily mean temperature (#circC)").c_str()
     );
 
     // Draw each year as a separate grey line
@@ -179,15 +166,17 @@ void plotTemperatureAllYears(
         );
 
         auto* graph = new TGraph(static_cast<int>(points.size()));
+        
         graph->SetName(
             (city + "_temperature_" + std::to_string(year)).c_str()
         );
+        
         graph->SetLineColor(kGray + 1);
         graph->SetLineWidth(1);
 
         for (std::size_t i = 0; i < points.size(); ++i) {
             graph->SetPoint(
-                static_cast<int>(i),
+                i,
                 points[i].first,
                 points[i].second
             );
@@ -197,8 +186,7 @@ void plotTemperatureAllYears(
     }
 
     // Create the blue graph for the average seasonal profile
-    auto* averageGraph =
-        new TGraph(static_cast<int>(averageProfile.days.size()));
+    auto* averageGraph = new TGraph(static_cast<int>(averageProfile.days.size()));
 
     averageGraph->SetName((city + "_temperature_average").c_str());
     averageGraph->SetLineColor(kBlue);
@@ -206,7 +194,7 @@ void plotTemperatureAllYears(
 
     for (std::size_t i = 0; i < averageProfile.days.size(); ++i) {
         averageGraph->SetPoint(
-            static_cast<int>(i),
+            i,
             averageProfile.days[i],
             averageProfile.meanValues[i]
         );
