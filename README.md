@@ -17,6 +17,14 @@ We investigate four aspects of the climate:
 3. **Precipitation (Gabriel):** How does precipitation vary throughout the year, and which city receives more precipitation?
 4. **Global solar irradiance (Manuel):** How does incoming solar radiation vary throughout the year, and how does the difference in latitude affect the measured irradiance?
 
+## Project report
+
+The project report, written in LaTeX, is available at
+[Project-Report.pdf](Project-Report.pdf).
+
+The report presents the methodology, statistical analysis, results,
+and discussion of the climate comparison between Lund and Umeå.
+
 ## Repository structure
 
 ```text
@@ -37,6 +45,7 @@ MNXB11-Climate-Comparison/
 ├── main.cxx                # Main program
 ├── Makefile                 # Compilation instructions
 ├── rootlogon.C             # ROOT configuration
+├── Project-Report.pdf      # Final project report
 ├── Workplan.md             # Project tasks and timeline
 └── ChangeLog               # Record of project changes
 ```
